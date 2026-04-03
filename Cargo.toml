@@ -1,16 +1,16 @@
 [package]
-name = "io-stream"
-description = "Set of I/O-free coroutines and runtimes to manage streams"
-version = "0.0.2"
-authors = ["soywod <clement.douin@posteo.net>"]
-rust-version = "1.56"
-edition = "2021"
+name = "io-socket"
+description = "Set of I/O-free coroutines and runtimes to manage sockets"
+version = "0.0.1"
+authors = ["Clément DOUIN <pimalaya.org@posteo.net>"]
+rust-version = "1.85"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 categories = ["api-bindings"]
-keywords = ["io-free", "coroutine", "runtime", "stream", "read-write"]
+keywords = ["io-free", "coroutine", "socket", "stream", "datagram"]
 homepage = "https://pimalaya.org"
-documentation = "https://docs.rs/io-stream/latest/io_stream"
-repository = "https://github.com/pimalaya/io-stream"
+documentation = "https://docs.rs/io-socket/latest/io_socket"
+repository = "https://github.com/pimalaya/io-socket"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -18,14 +18,15 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = []
-std = []
-tokio = ["dep:tokio"]
+std-stream = []
+std-udp-socket = []
+tokio-stream = ["dep:tokio"]
 
 [dev-dependencies]
 env_logger = "0.11"
 memchr = "2.7"
 rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
-rustls-platform-verifier = "0.5"
+rustls-platform-verifier = "0.6"
 tokio = { version = "1", features = ["full"] }
 url = "2.5"
 uuid = { version = "1", features = ["v4"] }

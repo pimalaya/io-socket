@@ -1,6 +1,6 @@
 # Contributing guide
 
-Thank you for investing your time in contributing to the I/O Stream project.
+Thank you for investing your time in contributing to the I/O Socket project.
 
 ## Development
 
@@ -29,9 +29,9 @@ You can disable [default features](https://doc.rust-lang.org/cargo/reference/fea
 Finally, you can build a release with `--release`:
 
 ```
-cargo build --no-default-features --features std --release
+cargo build --no-default-features --features std-stream --release
 ```
 
 ## Commit style
 
-I/O Stream follow the [conventional commits specification](https://www.conventionalcommits.org/en/v1.0.0/#summary).
+I/O Socket follows the [conventional commits specification](https://www.conventionalcommits.org/en/v1.0.0/#summary).

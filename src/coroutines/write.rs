@@ -1,98 +1,84 @@
-//! I/O-free coroutine to write bytes into a stream.
+//! I/O-free coroutine to write bytes into a buffer.
+
+use std::{fmt, mem};
 
 use log::{debug, trace};
 use thiserror::Error;
 
-use crate::io::{StreamIo, StreamOutput};
+use crate::io::{SocketInput, SocketOutput};
 
 /// Errors that can occur during the coroutine progression.
-#[derive(Clone, Debug, Error)]
-pub enum WriteStreamError {
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
+pub enum WriteSocketError {
     /// The coroutine received an invalid argument.
     ///
     /// Occurs when the coroutine receives an I/O response from
     /// another coroutine, which should not happen if the runtime maps
     /// correctly the arguments.
-    #[error("Invalid argument: expected {0}, got {1:?}")]
-    InvalidArgument(&'static str, StreamIo),
+    #[error("Expected argument SocketOutput::Write, got {0:?}")]
+    UnexpectedArg(SocketOutput),
 }
 
 /// Output emitted after a coroutine finishes its progression.
-#[derive(Clone, Debug)]
-pub enum WriteStreamResult {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WriteSocketResult {
     /// The coroutine has successfully terminated its progression.
-    Ok(StreamOutput),
+    Ok { buf: Vec<u8>, n: usize },
 
-    /// A stream I/O needs to be performed to make the coroutine
+    /// A socket I/O needs to be performed to make the coroutine
     /// progress.
-    Io(StreamIo),
+    Io { input: SocketInput },
 
     /// The coroutine reached the End Of File.
     ///
     /// Only the consumer can determine if its an error or not.
     Eof,
 
-    /// An error occured during the coroutine progression.
-    Err(WriteStreamError),
+    /// An error occurred during the coroutine progression.
+    Err { err: WriteSocketError },
 }
 
-/// I/O-free coroutine to write bytes into a stream.
-#[derive(Debug, Default)]
-pub struct WriteStream {
-    bytes: Vec<u8>,
+/// I/O-free coroutine to write bytes into a buffer.
+#[derive(Clone, Eq, PartialEq)]
+pub struct WriteSocket {
+    buf: Vec<u8>,
 }
 
-impl WriteStream {
-    /// Creates a new coroutine to write the given bytes.
-    pub fn new(bytes: Vec<u8>) -> Self {
-        trace!("init coroutine for writing {} bytes", bytes.len());
-        Self { bytes }
+impl WriteSocket {
+    /// Creates a new coroutine that will write the given bytes to the
+    /// socket.
+    pub fn new(buf: Vec<u8>) -> Self {
+        trace!("init coroutine for writing {} bytes", buf.len());
+        Self { buf }
     }
 
-    // /// Replaces the inner bytes with the given one.
-    // pub fn replace(&mut self, bytes: impl IntoIterator<Item = u8>) {
-    //     *self = Self::new(bytes.into_iter()collect());
-    // }
-
-    // /// Adds the given bytes the to inner buffer.
-    // pub fn extend(&mut self, more_bytes: impl IntoIterator<Item = u8>) {
-    //     match &mut self.bytes {
-    //         Some(bytes) => {
-    //             let prev_len = bytes.len();
-    //             bytes.extend(more_bytes);
-    //             let next_len = bytes.len();
-    //             let n = next_len - prev_len;
-    //             trace!("prepare {prev_len}+{n} additional bytes to be written");
-    //         }
-    //         None => self.replace(more_bytes),
-    //     }
-    // }
-
     /// Makes the write progress.
-    pub fn resume(&mut self, arg: Option<StreamIo>) -> WriteStreamResult {
+    pub fn resume(&mut self, arg: Option<SocketOutput>) -> WriteSocketResult {
         let Some(arg) = arg else {
-            let bytes = self.bytes.drain(..).collect();
-            trace!("wants I/O to write bytes");
-            return WriteStreamResult::Io(StreamIo::Write(Err(bytes)));
+            trace!("wants to write bytes");
+            let buf = mem::take(&mut self.buf);
+            let input = SocketInput::Write { buf };
+            return WriteSocketResult::Io { input };
         };
 
         trace!("resume after writing bytes");
-
-        let StreamIo::Write(io) = arg else {
-            return WriteStreamResult::Err(WriteStreamError::InvalidArgument("write output", arg));
+        let SocketOutput::Wrote { buf, n } = arg else {
+            let err = WriteSocketError::UnexpectedArg(arg);
+            return WriteSocketResult::Err { err };
         };
 
-        let output = match io {
-            Ok(output) => output,
-            Err(bytes) => return WriteStreamResult::Io(StreamIo::Write(Err(bytes))),
-        };
-
-        match output.bytes_count {
-            0 => WriteStreamResult::Eof,
-            n => {
-                debug!("wrote {n} bytes");
-                WriteStreamResult::Ok(output)
-            }
+        if n == 0 {
+            debug!("received EOF");
+            return WriteSocketResult::Eof;
         }
+
+        debug!("wrote {n}/{} bytes", buf.capacity());
+        WriteSocketResult::Ok { buf, n }
+    }
+}
+
+impl fmt::Debug for WriteSocket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WriteSocket({})", self.buf.len())
     }
 }

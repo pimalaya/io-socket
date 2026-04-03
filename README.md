@@ -1,76 +1,90 @@
-# I/O Stream [![Documentation](https://img.shields.io/docsrs/io-stream)](https://docs.rs/io-stream/latest/io_stream) [![Matrix](https://img.shields.io/matrix/pimalaya:matrix.org?color=success&label=chat)](https://matrix.to/#/#pimalaya:matrix.org)
+# I/O Socket [![Documentation](https://img.shields.io/docsrs/io-socket?style=flat&logo=docs.rs&logoColor=white)](https://docs.rs/io-socket/latest/io_socket) [![Matrix](https://img.shields.io/badge/chat-%23pimalaya-blue?style=flat&logo=matrix&logoColor=white)](https://matrix.to/#/#pimalaya:matrix.org) [![Mastodon](https://img.shields.io/badge/news-%40pimalaya-blue?style=flat&logo=mastodon&logoColor=white)](https://fosstodon.org/@pimalaya)
 
-Set of **I/O-free** Rust coroutines and runtimes to manage streams.
+Set of **I/O-free** Rust coroutines and runtimes to manage sockets.
 
-This library allows you to manage streams using an I/O-agnostic approach, based on 3 concepts:
+This library provides an I/O-agnostic abstraction over sockets — both stream sockets (TCP, Unix) and datagram sockets (UDP) — based on three concepts:
 
 ### Coroutine
 
-A coroutine is an *I/O-free*, *resumable* and *composable* state machine that **emits I/O requests**. A coroutine is considered *terminated* when it does not emit I/O requests anymore.
+A coroutine is an *I/O-free*, *resumable* and *composable* state machine. It **emits I/O requests** without performing any I/O itself, and **receives I/O responses** to make progress. A coroutine is terminated when it stops emitting I/O requests.
 
-*See available coroutines at [./src/coroutines](https://github.com/pimalaya/io-stream/tree/master/src/coroutines).*
+*See available coroutines at [./src/coroutines](https://github.com/pimalaya/io-socket/tree/master/src/coroutines).*
 
 ### Runtime
 
-A runtime contains all the I/O logic, and is responsible for **processing I/O requests** emitted by coroutines.
+A runtime contains all the I/O logic. It is responsible for **processing I/O requests** and returning the corresponding I/O responses. A runtime targets a specific transport and execution model (blocking std, async Tokio, UDP…).
 
-*See available runtimes at [./src/runtimes](https://github.com/pimalaya/io-stream/tree/master/src/runtimes).*
+*See available runtimes at [./src/runtimes](https://github.com/pimalaya/io-socket/tree/master/src/runtimes).*
 
 ### Loop
 
-The loop is the glue between coroutines and runtimes. It makes the coroutine progress while allowing runtime to process I/O.
+The loop is the glue between coroutines and runtimes. It drives the coroutine forward by feeding each `SocketOutput` back as the next argument, until the coroutine terminates.
 
 ## Examples
 
-### Read stdin synchronously
+### Read from a TCP stream (blocking)
 
 ```rust,ignore
-use io_stream::{coroutines::Read, runtimes::std::handle};
+use std::net::TcpStream;
 
-let mut stdin = std::io::stdin();
+use io_socket::{
+    coroutines::read::{ReadSocket, ReadSocketResult},
+    runtimes::std_stream::handle,
+};
+
+let mut stream = TcpStream::connect("example.com:80").unwrap();
 
 let mut arg = None;
-let mut read = Read::new();
+let mut read = ReadSocket::new();
 
-let output = loop {
-    match read.resume(arg) {
-        Ok(output) => break output,
-        Err(io) => arg = Some(handle(&mut stdin, io).unwrap()),
+let (buf, n) = loop {
+    match read.resume(arg.take()) {
+        ReadSocketResult::Ok { buf, n } => break (buf, n),
+        ReadSocketResult::Eof => break (vec![], 0),
+        ReadSocketResult::Err { err } => panic!("{err}"),
+        ReadSocketResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
     }
 };
 
-// same as &output.buffer[..output.bytes_count]
-let bytes = output.bytes();
+let bytes = &buf[..n];
 ```
 
-### Write TCP stream asynchronously
+### Write to a TCP stream (async Tokio)
 
 ```rust,ignore
 use tokio::net::TcpStream;
-use io_stream::{coroutines::Write, runtimes::tokio::handle};
 
-let mut tcp = TcpStream::connect("127.0.0.1:1234").await.unwrap();
+use io_socket::{
+    coroutines::write::{WriteSocket, WriteSocketResult},
+    runtimes::tokio_stream::handle,
+};
+
+let mut stream = TcpStream::connect("example.com:80").await.unwrap();
 
 let mut arg = None;
-let mut write = Write::new(b"bytes".iter().cloned());
+let mut write = WriteSocket::new(b"GET / HTTP/1.0\r\n\r\n".to_vec());
 
-while let Err(io) = write.resume(arg) {
-    arg = Some(handle(&mut tcp, io).await.unwrap());
+loop {
+    match write.resume(arg.take()) {
+        WriteSocketResult::Ok { .. } => break,
+        WriteSocketResult::Eof => panic!("connection closed"),
+        WriteSocketResult::Err { err } => panic!("{err}"),
+        WriteSocketResult::Io { input } => arg = Some(handle(&mut stream, input).await.unwrap()),
+    }
 }
 ```
 
-*See complete examples at [./examples](https://github.com/pimalaya/io-stream/blob/master/examples).*
+*See complete examples at [./examples](https://github.com/pimalaya/io-socket/blob/master/examples).*
 
 ## More examples
 
 Have a look at projects built on the top of this library:
 
 - [io-addressbook](https://github.com/pimalaya/io-addressbook): Set of I/O-free coroutines to manage contacts
-- [io-http](https://github.com/pimalaya/io-http): Set of I/O-free Rust coroutines to manage HTTP streams
+- [io-http](https://github.com/pimalaya/io-http): Set of I/O-free Rust coroutines to manage HTTP sockets
 - [io-oauth](https://github.com/pimalaya/io-oauth): Set of I/O-free Rust coroutines to manage OAuth flows
-- [io-starttls](https://github.com/pimalaya/io-starttls): I/O-free coroutine to upgrade any plain stream to a secure one
+- [io-starttls](https://github.com/pimalaya/io-starttls): I/O-free coroutine to upgrade any plain socket to a secure one
 - [io-timer](https://github.com/pimalaya/io-timer): Set of I/O-free coroutines to manage timers
-
 - [Cardamum](https://github.com/pimalaya/cardamum): CLI to manage contacts
 - [Comodoro](https://github.com/pimalaya/comodoro): CLI to manage timers
 - [Ortie](https://github.com/pimalaya/ortie): CLI to manage OAuth access tokens
@@ -84,15 +98,21 @@ This project is licensed under either of:
 
 at your option.
 
+## Social
+
+- Chat on [Matrix](https://matrix.to/#/#pimalaya:matrix.org)
+- News on [Mastodon](https://fosstodon.org/@pimalaya) or [RSS](https://fosstodon.org/@pimalaya.rss)
+- Mail at [pimalaya.org@posteo.net](mailto:pimalaya.org@posteo.net)
+
 ## Sponsoring
 
 [![nlnet](https://nlnet.nl/logo/banner-160x60.png)](https://nlnet.nl/)
 
-Special thanks to the [NLnet foundation](https://nlnet.nl/) and the [European Commission](https://www.ngi.eu/) that helped the project to receive financial support from various programs:
+Special thanks to the [NLnet foundation](https://nlnet.nl/) and the [European Commission](https://www.ngi.eu/) that have been financially supporting the project for years:
 
-- [NGI Assure](https://nlnet.nl/project/Himalaya/) in 2022
-- [NGI Zero Entrust](https://nlnet.nl/project/Pimalaya/) in 2023
-- [NGI Zero Core](https://nlnet.nl/project/Pimalaya-PIM/) in 2024 *(still ongoing)*
+- 2022: [NGI Assure](https://nlnet.nl/project/Himalaya/)
+- 2023: [NGI Zero Entrust](https://nlnet.nl/project/Pimalaya/)
+- 2024: [NGI Zero Core](https://nlnet.nl/project/Pimalaya-PIM/) *(still ongoing in 2026)*
 
 If you appreciate the project, feel free to donate using one of the following providers:
 

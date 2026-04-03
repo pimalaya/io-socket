@@ -1,15 +1,13 @@
-//! Collection of I/O-free, resumable and composable stream state
+//! Collection of I/O-free, resumable and composable socket state
 //! machines.
 //!
-//! Coroutines emit [I/O] requests that need to be processed by
-//! [runtimes] in order to continue their progression.
+//! Coroutines emit [`SocketInput`] requests that need to be processed
+//! by [runtimes] in order to continue their progression.
 //!
-//! [I/O]: crate::io::StreamIo
+//! [`SocketInput`]: crate::io::SocketInput
 //! [runtimes]: crate::runtimes
 
 pub mod read;
-#[path = "read-exact.rs"]
 pub mod read_exact;
-#[path = "read-to-end.rs"]
 pub mod read_to_end;
 pub mod write;

@@ -1,18 +1,15 @@
-#![cfg(feature = "std")]
+#![cfg(feature = "std-stream")]
 
 use std::{
     env,
-    io::{stdin, stdout, Write as _},
+    io::{Read, Write, stdin, stdout},
     net::TcpStream,
     sync::Arc,
 };
 
-use io_stream::{
-    coroutines::{
-        read::{ReadStream, ReadStreamResult},
-        write::{WriteStream, WriteStreamResult},
-    },
-    runtimes::std::handle,
+use io_socket::{
+    coroutines::{read::*, write::*},
+    runtimes::std_stream::handle,
 };
 use memchr::memmem;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
@@ -36,17 +33,19 @@ fn main() {
         url.port_or_known_default().unwrap(),
     );
 
-    println!("request: {request:?}");
+    println!("----------------");
+    println!("{}", request.trim());
+    println!("----------------");
 
     let mut arg = None;
-    let mut write = WriteStream::new(request.into_bytes());
+    let mut write = WriteSocket::new(request.into_bytes());
 
     loop {
-        match write.resume(arg) {
-            WriteStreamResult::Ok(_) => break,
-            WriteStreamResult::Err(err) => panic!("{err}"),
-            WriteStreamResult::Eof => panic!("reached unexpected EOF"),
-            WriteStreamResult::Io(io) => arg = Some(handle(&mut stream, io).unwrap()),
+        match write.resume(arg.take()) {
+            WriteSocketResult::Ok { .. } => break,
+            WriteSocketResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
+            WriteSocketResult::Err { err } => panic!("{err}"),
+            WriteSocketResult::Eof => panic!("reached unexpected EOF"),
         }
     }
 
@@ -54,18 +53,18 @@ fn main() {
 
     loop {
         let mut arg = None;
-        let mut read = ReadStream::new();
+        let mut read = ReadSocket::new();
 
-        let output = loop {
-            match read.resume(arg) {
-                ReadStreamResult::Ok(output) => break output,
-                ReadStreamResult::Err(err) => panic!("{err}"),
-                ReadStreamResult::Eof => panic!("reached unexpected EOF"),
-                ReadStreamResult::Io(io) => arg = Some(handle(&mut stream, io).unwrap()),
+        let (buf, n) = loop {
+            match read.resume(arg.take()) {
+                ReadSocketResult::Ok { buf, n } => break (buf, n),
+                ReadSocketResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
+                ReadSocketResult::Eof => panic!("reached unexpected EOF"),
+                ReadSocketResult::Err { err } => panic!("{err}"),
             }
         };
 
-        let bytes = output.bytes();
+        let bytes = &buf[..n];
 
         match memmem::find(bytes, &[b'\r', b'\n', b'\r', b'\n']) {
             None => {
@@ -79,7 +78,6 @@ fn main() {
         }
     }
 
-    println!("----------------");
     println!("{}", String::from_utf8_lossy(&response));
     println!("----------------");
 }
@@ -94,14 +92,14 @@ fn read_line(prompt: &str) -> String {
     line.trim().to_owned()
 }
 
-trait StreamExt: std::io::Read + std::io::Write {}
-impl<T: std::io::Read + std::io::Write> StreamExt for T {}
+trait Stream: Read + Write {}
+impl<T: Read + Write> Stream for T {}
 
-fn connect(url: &Url) -> Box<dyn StreamExt> {
+fn connect(url: &Url) -> Box<dyn Stream> {
     let domain = url.domain().unwrap();
 
     if url.scheme().eq_ignore_ascii_case("https") {
-        let config = ClientConfig::with_platform_verifier();
+        let config = ClientConfig::with_platform_verifier().unwrap();
         let server_name = domain.to_string().try_into().unwrap();
         let conn = ClientConnection::new(Arc::new(config), server_name).unwrap();
         let tcp = TcpStream::connect((domain.to_string(), 443)).unwrap();

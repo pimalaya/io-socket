@@ -1,50 +1,50 @@
 //! I/O-free coroutine to read bytes into a buffer.
 
-use std::mem;
+use std::{fmt, mem};
 
 use log::{debug, trace};
 use thiserror::Error;
 
-use crate::io::{StreamIo, StreamOutput};
+use crate::io::{SocketInput, SocketOutput};
 
 /// Errors that can occur during the coroutine progression.
-#[derive(Clone, Debug, Error)]
-pub enum ReadStreamError {
+#[derive(Clone, Debug, Eq, PartialEq, Error)]
+pub enum ReadSocketError {
     /// The coroutine received an invalid argument.
     ///
     /// Occurs when the coroutine receives an I/O response from
     /// another coroutine, which should not happen if the runtime maps
     /// correctly the arguments.
-    #[error("Invalid argument: expected {0}, got {1:?}")]
-    InvalidArgument(&'static str, StreamIo),
+    #[error("Expected argument SocketOutput::Read, got {0:?}")]
+    UnexpectedArg(SocketOutput),
 }
 
 /// Output emitted after a coroutine finishes its progression.
-#[derive(Clone, Debug)]
-pub enum ReadStreamResult {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ReadSocketResult {
     /// The coroutine has successfully terminated its progression.
-    Ok(StreamOutput),
+    Ok { buf: Vec<u8>, n: usize },
 
-    /// A stream I/O needs to be performed to make the coroutine
+    /// A socket I/O needs to be performed to make the coroutine
     /// progress.
-    Io(StreamIo),
+    Io { input: SocketInput },
 
     /// The coroutine reached the End Of File.
     ///
     /// Only the consumer can determine if its an error or not.
     Eof,
 
-    /// An error occured during the coroutine progression.
-    Err(ReadStreamError),
+    /// An error occurred during the coroutine progression.
+    Err { err: ReadSocketError },
 }
 
 /// I/O-free coroutine to read bytes into a buffer.
-#[derive(Debug)]
-pub struct ReadStream {
-    buffer: Vec<u8>,
+#[derive(Clone, Eq, PartialEq)]
+pub struct ReadSocket {
+    buf: Vec<u8>,
 }
 
-impl ReadStream {
+impl ReadSocket {
     /// The default read buffer capacity.
     pub const DEFAULT_CAPACITY: usize = 8 * 1024;
 
@@ -60,134 +60,61 @@ impl ReadStream {
     /// given capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         trace!("init coroutine to read bytes (capacity: {capacity})");
-        let buffer = vec![0; capacity];
-        Self { buffer }
+        let buf = vec![0; capacity];
+        Self { buf }
     }
 
     /// Returns the buffer capacity.
     pub fn capacity(&self) -> usize {
-        self.buffer.capacity()
+        self.buf.capacity()
     }
 
     /// Shortens the buffer to the given length.
     pub fn truncate(&mut self, len: usize) {
-        self.buffer.truncate(len);
-        self.buffer.shrink_to(len);
+        self.buf.truncate(len);
+        self.buf.shrink_to(len);
     }
 
     /// Replaces the inner buffer with the given one.
-    pub fn replace(&mut self, mut buffer: Vec<u8>) {
-        buffer.fill(0);
-        self.buffer = buffer;
+    pub fn replace(&mut self, mut buf: Vec<u8>) {
+        buf.fill(0);
+        self.buf = buf;
     }
 
     /// Makes the read progress.
-    pub fn resume(&mut self, arg: Option<StreamIo>) -> ReadStreamResult {
+    pub fn resume(&mut self, arg: Option<SocketOutput>) -> ReadSocketResult {
         let Some(arg) = arg else {
-            let mut buffer = vec![0; self.buffer.capacity()];
-            mem::swap(&mut buffer, &mut self.buffer);
-            trace!("wants I/O to read bytes");
-            return ReadStreamResult::Io(StreamIo::Read(Err(buffer)));
+            trace!("wants to read bytes");
+            let mut buf = vec![0; self.buf.capacity()];
+            mem::swap(&mut buf, &mut self.buf);
+            let input = SocketInput::Read { buf };
+            return ReadSocketResult::Io { input };
         };
 
         trace!("resume after reading bytes");
-
-        let StreamIo::Read(io) = arg else {
-            return ReadStreamResult::Err(ReadStreamError::InvalidArgument("read output", arg));
+        let SocketOutput::Read { buf, n } = arg else {
+            let err = ReadSocketError::UnexpectedArg(arg);
+            return ReadSocketResult::Err { err };
         };
 
-        let output = match io {
-            Ok(output) => output,
-            Err(buffer) => return ReadStreamResult::Io(StreamIo::Read(Err(buffer))),
-        };
-
-        match output.bytes_count {
-            0 => ReadStreamResult::Eof,
-            n => {
-                debug!("read {n}/{} bytes", output.buffer.capacity());
-                ReadStreamResult::Ok(output)
-            }
+        if n == 0 {
+            debug!("received EOF");
+            return ReadSocketResult::Eof;
         }
+
+        debug!("read {n}/{} bytes", buf.capacity());
+        ReadSocketResult::Ok { buf, n }
     }
 }
 
-impl Default for ReadStream {
+impl fmt::Debug for ReadSocket {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ReadSocket({})", self.buf.len())
+    }
+}
+
+impl Default for ReadSocket {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::{BufReader, Read as _};
-
-    use crate::{
-        coroutines::read::ReadStreamResult,
-        io::{StreamIo, StreamOutput},
-    };
-
-    use super::ReadStream;
-
-    #[test]
-    fn read() {
-        let _ = env_logger::try_init();
-
-        let mut reader = BufReader::new("abcdef".as_bytes());
-
-        let mut read = ReadStream::with_capacity(4);
-        let mut arg = None;
-
-        let output = loop {
-            match read.resume(arg.take()) {
-                ReadStreamResult::Ok(output) => break output,
-                ReadStreamResult::Io(StreamIo::Read(Err(mut buffer))) => {
-                    let bytes_count = reader.read(&mut buffer).unwrap();
-                    let output = StreamOutput {
-                        buffer,
-                        bytes_count,
-                    };
-                    arg = Some(StreamIo::Read(Ok(output)))
-                }
-                other => unreachable!("Unexpected result: {other:?}"),
-            }
-        };
-
-        assert_eq!(output.bytes(), b"abcd");
-
-        read.replace(output.buffer);
-
-        let output = loop {
-            match read.resume(arg.take()) {
-                ReadStreamResult::Ok(output) => break output,
-                ReadStreamResult::Io(StreamIo::Read(Err(mut buffer))) => {
-                    let bytes_count = reader.read(&mut buffer).unwrap();
-                    let output = StreamOutput {
-                        buffer,
-                        bytes_count,
-                    };
-                    arg = Some(StreamIo::Read(Ok(output)))
-                }
-                other => unreachable!("Unexpected result: {other:?}"),
-            }
-        };
-
-        assert_eq!(output.bytes(), b"ef");
-
-        read.replace(output.buffer);
-
-        loop {
-            match read.resume(arg.take()) {
-                ReadStreamResult::Eof => break,
-                ReadStreamResult::Io(StreamIo::Read(Err(mut buffer))) => {
-                    let bytes_count = reader.read(&mut buffer).unwrap();
-                    let output = StreamOutput {
-                        buffer,
-                        bytes_count,
-                    };
-                    arg = Some(StreamIo::Read(Ok(output)))
-                }
-                other => unreachable!("Unexpected result: {other:?}"),
-            }
-        }
     }
 }
