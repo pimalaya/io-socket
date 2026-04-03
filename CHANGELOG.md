@@ -19,4 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Renamed `tokio` cargo feature to `tokio-stream`.
 
+- Bumped MSRV to `1.87`.
+
 [unreleased]: https://github.com/pimalaya/io-socket/compare/root..HEAD
