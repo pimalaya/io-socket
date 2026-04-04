@@ -1,5 +1,6 @@
 //! Asynchronous stream socket runtime backed by Tokio.
 
+use alloc::vec::Vec;
 use log::trace;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, Result};
 

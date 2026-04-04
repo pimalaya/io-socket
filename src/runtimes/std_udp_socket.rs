@@ -1,5 +1,6 @@
 //! Synchronous UDP datagram socket runtime backed by [`UdpSocket`].
 
+use alloc::vec::Vec;
 use std::{io::Result, net::UdpSocket};
 
 use log::trace;

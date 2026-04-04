@@ -1,5 +1,6 @@
-//! Synchronous stream socket runtime backed by [`io`].
+//! Synchronous stream socket runtime backed by [`std::io`].
 
+use alloc::vec::Vec;
 use std::io::{Read, Result, Write};
 
 use log::trace;

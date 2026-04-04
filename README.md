@@ -1,6 +1,6 @@
 # I/O Socket [![Documentation](https://img.shields.io/docsrs/io-socket?style=flat&logo=docs.rs&logoColor=white)](https://docs.rs/io-socket/latest/io_socket) [![Matrix](https://img.shields.io/badge/chat-%23pimalaya-blue?style=flat&logo=matrix&logoColor=white)](https://matrix.to/#/#pimalaya:matrix.org) [![Mastodon](https://img.shields.io/badge/news-%40pimalaya-blue?style=flat&logo=mastodon&logoColor=white)](https://fosstodon.org/@pimalaya)
 
-Set of **I/O-free** Rust coroutines and runtimes to manage sockets.
+**I/O-free** socket client library written in Rust
 
 This library provides an I/O-agnostic abstraction over sockets — both stream sockets (TCP, Unix) and datagram sockets (UDP) — based on three concepts:
 
@@ -40,16 +40,16 @@ let mut read = ReadSocket::new();
 let (buf, n) = loop {
     match read.resume(arg.take()) {
         ReadSocketResult::Ok { buf, n } => break (buf, n),
+        ReadSocketResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
         ReadSocketResult::Eof => break (vec![], 0),
         ReadSocketResult::Err { err } => panic!("{err}"),
-        ReadSocketResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
     }
 };
 
 let bytes = &buf[..n];
 ```
 
-### Write to a TCP stream (async Tokio)
+### Write on a TCP stream (async)
 
 ```rust,ignore
 use tokio::net::TcpStream;
@@ -67,9 +67,9 @@ let mut write = WriteSocket::new(b"GET / HTTP/1.0\r\n\r\n".to_vec());
 loop {
     match write.resume(arg.take()) {
         WriteSocketResult::Ok { .. } => break,
+        WriteSocketResult::Io { input } => arg = Some(handle(&mut stream, input).await.unwrap()),
         WriteSocketResult::Eof => panic!("connection closed"),
         WriteSocketResult::Err { err } => panic!("{err}"),
-        WriteSocketResult::Io { input } => arg = Some(handle(&mut stream, input).await.unwrap()),
     }
 }
 ```
@@ -80,6 +80,7 @@ loop {
 
 Have a look at projects built on the top of this library:
 
+- [io-dns](https://github.com/pimalaya/io-dns): I/O-free DNS client library
 - [io-addressbook](https://github.com/pimalaya/io-addressbook): Set of I/O-free coroutines to manage contacts
 - [io-http](https://github.com/pimalaya/io-http): Set of I/O-free Rust coroutines to manage HTTP sockets
 - [io-oauth](https://github.com/pimalaya/io-oauth): Set of I/O-free Rust coroutines to manage OAuth flows

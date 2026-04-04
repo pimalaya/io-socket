@@ -1,6 +1,7 @@
 //! I/O-free coroutine to read exactly N bytes from a socket.
 
-use std::mem;
+use alloc::vec::Vec;
+use core::mem;
 
 use log::{debug, trace};
 use thiserror::Error;

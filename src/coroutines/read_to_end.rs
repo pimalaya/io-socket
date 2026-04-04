@@ -1,6 +1,7 @@
 //! I/O-free coroutine to read from a socket until EOF.
 
-use std::mem;
+use alloc::vec::Vec;
+use core::mem;
 
 use log::trace;
 use thiserror::Error;

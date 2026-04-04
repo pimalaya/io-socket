@@ -1,5 +1,5 @@
 {
-  description = "Set of I/O-free Rust coroutines and runtimes to manage sockets";
+  description = "I/O-free socket client library written in Rust";
 
   inputs = {
     nixpkgs = {

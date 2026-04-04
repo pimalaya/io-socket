@@ -1,6 +1,7 @@
 //! I/O-free coroutine to write bytes into a buffer.
 
-use std::{fmt, mem};
+use alloc::vec::Vec;
+use core::{fmt, mem};
 
 use log::{debug, trace};
 use thiserror::Error;

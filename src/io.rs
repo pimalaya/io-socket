@@ -1,6 +1,7 @@
 //! Socket input and output.
 
-use std::fmt;
+use alloc::vec::Vec;
+use core::fmt;
 
 /// Socket input emitted by [coroutines] and processed by [runtimes].
 ///

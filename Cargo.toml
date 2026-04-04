@@ -1,13 +1,13 @@
 [package]
 name = "io-socket"
-description = "Set of I/O-free coroutines and runtimes to manage sockets"
+description = "I/O-free socket client library"
 version = "0.0.1"
 authors = ["Clément DOUIN <pimalaya.org@posteo.net>"]
 rust-version = "1.87"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-categories = ["api-bindings"]
-keywords = ["io-free", "coroutine", "socket", "stream", "datagram"]
+categories = ["api-bindings", "no-std"]
+keywords = ["io-free", "no-std", "coroutine", "socket", "stream"]
 homepage = "https://pimalaya.org"
 documentation = "https://docs.rs/io-socket/latest/io_socket"
 repository = "https://github.com/pimalaya/io-socket"
