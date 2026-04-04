@@ -29,7 +29,6 @@ rustls = { version = "0.23", default-features = false, features = ["logging", "r
 rustls-platform-verifier = "0.6"
 tokio = { version = "1", features = ["full"] }
 url = "2.5"
-uuid = { version = "1", features = ["v4"] }
 
 [dependencies]
 log = "0.4"
