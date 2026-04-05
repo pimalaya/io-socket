@@ -1,7 +1,7 @@
 use std::io::{BufReader, Read};
 
 use io_socket::{
-    coroutines::read::{ReadSocket, ReadSocketResult},
+    coroutines::read::{SocketRead, SocketReadResult},
     io::{SocketInput, SocketOutput},
 };
 
@@ -11,13 +11,13 @@ fn read() {
 
     let mut reader = BufReader::new("abcdef".as_bytes());
 
-    let mut read = ReadSocket::with_capacity(4);
+    let mut read = SocketRead::with_capacity(4);
     let mut arg = None;
 
     let (buf, n) = loop {
         match read.resume(arg.take()) {
-            ReadSocketResult::Ok { buf, n } => break (buf, n),
-            ReadSocketResult::Io {
+            SocketReadResult::Ok { buf, n } => break (buf, n),
+            SocketReadResult::Io {
                 input: SocketInput::Read { mut buf },
             } => {
                 let n = reader.read(&mut buf).unwrap();
@@ -32,8 +32,8 @@ fn read() {
 
     let (buf, n) = loop {
         match read.resume(arg.take()) {
-            ReadSocketResult::Ok { buf, n } => break (buf, n),
-            ReadSocketResult::Io {
+            SocketReadResult::Ok { buf, n } => break (buf, n),
+            SocketReadResult::Io {
                 input: SocketInput::Read { mut buf },
             } => {
                 let n = reader.read(&mut buf).unwrap();
@@ -48,8 +48,8 @@ fn read() {
 
     loop {
         match read.resume(arg.take()) {
-            ReadSocketResult::Eof => break,
-            ReadSocketResult::Io {
+            SocketReadResult::Eof => break,
+            SocketReadResult::Io {
                 input: SocketInput::Read { mut buf },
             } => {
                 let n = reader.read(&mut buf).unwrap();

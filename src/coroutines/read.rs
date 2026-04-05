@@ -10,7 +10,7 @@ use crate::io::{SocketInput, SocketOutput};
 
 /// Errors that can occur during the coroutine progression.
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
-pub enum ReadSocketError {
+pub enum SocketReadError {
     /// The coroutine received an invalid argument.
     ///
     /// Occurs when the coroutine receives an I/O response from
@@ -22,7 +22,7 @@ pub enum ReadSocketError {
 
 /// Output emitted after a coroutine finishes its progression.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ReadSocketResult {
+pub enum SocketReadResult {
     /// The coroutine has successfully terminated its progression.
     Ok { buf: Vec<u8>, n: usize },
 
@@ -36,16 +36,16 @@ pub enum ReadSocketResult {
     Eof,
 
     /// An error occurred during the coroutine progression.
-    Err { err: ReadSocketError },
+    Err { err: SocketReadError },
 }
 
 /// I/O-free coroutine to read bytes into a buffer.
 #[derive(Clone, Eq, PartialEq)]
-pub struct ReadSocket {
+pub struct SocketRead {
     buf: Vec<u8>,
 }
 
-impl ReadSocket {
+impl SocketRead {
     /// The default read buffer capacity.
     pub const DEFAULT_CAPACITY: usize = 8 * 1024;
 
@@ -83,38 +83,38 @@ impl ReadSocket {
     }
 
     /// Makes the read progress.
-    pub fn resume(&mut self, arg: Option<SocketOutput>) -> ReadSocketResult {
+    pub fn resume(&mut self, arg: Option<SocketOutput>) -> SocketReadResult {
         let Some(arg) = arg else {
             trace!("wants to read bytes");
             let mut buf = vec![0; self.buf.capacity()];
             mem::swap(&mut buf, &mut self.buf);
             let input = SocketInput::Read { buf };
-            return ReadSocketResult::Io { input };
+            return SocketReadResult::Io { input };
         };
 
         trace!("resume after reading bytes");
         let SocketOutput::Read { buf, n } = arg else {
-            let err = ReadSocketError::UnexpectedArg(arg);
-            return ReadSocketResult::Err { err };
+            let err = SocketReadError::UnexpectedArg(arg);
+            return SocketReadResult::Err { err };
         };
 
         if n == 0 {
             debug!("received EOF");
-            return ReadSocketResult::Eof;
+            return SocketReadResult::Eof;
         }
 
         debug!("read {n}/{} bytes", buf.capacity());
-        ReadSocketResult::Ok { buf, n }
+        SocketReadResult::Ok { buf, n }
     }
 }
 
-impl fmt::Debug for ReadSocket {
+impl fmt::Debug for SocketRead {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ReadSocket({})", self.buf.len())
+        write!(f, "SocketRead({})", self.buf.len())
     }
 }
 
-impl Default for ReadSocket {
+impl Default for SocketRead {
     fn default() -> Self {
         Self::new()
     }

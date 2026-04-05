@@ -38,14 +38,14 @@ fn main() {
     println!("----------------");
 
     let mut arg = None;
-    let mut write = WriteSocket::new(request.into_bytes());
+    let mut write = SocketWrite::new(request.into_bytes());
 
     loop {
         match write.resume(arg.take()) {
-            WriteSocketResult::Ok { .. } => break,
-            WriteSocketResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
-            WriteSocketResult::Err { err } => panic!("{err}"),
-            WriteSocketResult::Eof => panic!("reached unexpected EOF"),
+            SocketWriteResult::Ok { .. } => break,
+            SocketWriteResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
+            SocketWriteResult::Err { err } => panic!("{err}"),
+            SocketWriteResult::Eof => panic!("reached unexpected EOF"),
         }
     }
 
@@ -53,14 +53,14 @@ fn main() {
 
     loop {
         let mut arg = None;
-        let mut read = ReadSocket::new();
+        let mut read = SocketRead::new();
 
         let (buf, n) = loop {
             match read.resume(arg.take()) {
-                ReadSocketResult::Ok { buf, n } => break (buf, n),
-                ReadSocketResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
-                ReadSocketResult::Eof => panic!("reached unexpected EOF"),
-                ReadSocketResult::Err { err } => panic!("{err}"),
+                SocketReadResult::Ok { buf, n } => break (buf, n),
+                SocketReadResult::Io { input } => arg = Some(handle(&mut stream, input).unwrap()),
+                SocketReadResult::Eof => panic!("reached unexpected EOF"),
+                SocketReadResult::Err { err } => panic!("{err}"),
             }
         };
 

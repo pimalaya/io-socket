@@ -22,6 +22,18 @@ std-stream = []
 std-udp-socket = []
 tokio-stream = ["dep:tokio"]
 
+[[example]]
+name = "std_http10_rustls"
+required-features = ["std-stream"]
+
+[[example]]
+name = "std_udp_dns_query"
+required-features = ["std-udp-socket"]
+
+[[example]]
+name = "tokio_tcp_repl"
+required-features = ["tokio-stream"]
+
 [dev-dependencies]
 env_logger = "0.11"
 memchr = "2.7"

@@ -7,21 +7,21 @@ use log::trace;
 use thiserror::Error;
 
 use crate::{
-    coroutines::read::{ReadSocket, ReadSocketError, ReadSocketResult},
+    coroutines::read::{SocketRead, SocketReadError, SocketReadResult},
     io::{SocketInput, SocketOutput},
 };
 
 /// Errors that can occur during the coroutine progression.
 #[derive(Clone, Debug, Error)]
-pub enum ReadSocketToEndError {
-    /// Error from the inner [`ReadSocket`] coroutine.
+pub enum SocketReadToEndError {
+    /// Error from the inner [`SocketRead`] coroutine.
     #[error(transparent)]
-    Read(#[from] ReadSocketError),
+    Read(#[from] SocketReadError),
 }
 
 /// Output emitted after the coroutine finishes its progression.
 #[derive(Clone, Debug)]
-pub enum ReadSocketToEndResult {
+pub enum SocketReadToEndResult {
     /// The coroutine has successfully read all bytes up to EOF.
     Ok { buf: Vec<u8> },
 
@@ -30,35 +30,35 @@ pub enum ReadSocketToEndResult {
     Io { input: SocketInput },
 
     /// An error occurred during the coroutine progression.
-    Err { err: ReadSocketToEndError },
+    Err { err: SocketReadToEndError },
 }
 
 /// I/O-free coroutine to read from a socket until EOF.
 ///
-/// Drives a [`ReadSocket`] coroutine in a loop, accumulating every
-/// chunk into an internal buffer. Returns [`ReadSocketToEndResult::Ok`]
+/// Drives a [`SocketRead`] coroutine in a loop, accumulating every
+/// chunk into an internal buffer. Returns [`SocketReadToEndResult::Ok`]
 /// when the socket signals EOF (`n == 0`).
 #[derive(Debug)]
-pub struct ReadSocketToEnd {
+pub struct SocketReadToEnd {
     /// Inner single-read coroutine, reused across iterations.
-    read: ReadSocket,
+    read: SocketRead,
 
     /// Accumulates all bytes read until EOF.
     buffer: Vec<u8>,
 }
 
-impl ReadSocketToEnd {
+impl SocketReadToEnd {
     /// Creates a new coroutine using a read buffer with
-    /// [`ReadSocket::DEFAULT_CAPACITY`] capacity.
+    /// [`SocketRead::DEFAULT_CAPACITY`] capacity.
     pub fn new() -> Self {
-        Self::with_capacity(ReadSocket::DEFAULT_CAPACITY)
+        Self::with_capacity(SocketRead::DEFAULT_CAPACITY)
     }
 
     /// Creates a new coroutine using a read buffer with the given
     /// capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         trace!("init coroutine to read until EOF (capacity: {capacity})");
-        let read = ReadSocket::with_capacity(capacity);
+        let read = SocketRead::with_capacity(capacity);
         let buffer = Vec::with_capacity(capacity);
         Self { read, buffer }
     }
@@ -76,29 +76,29 @@ impl ReadSocketToEnd {
     /// Pass `None` on the first call. On subsequent calls, pass the
     /// [`SocketOutput`] returned by the runtime after processing the
     /// last emitted [`SocketInput`].
-    pub fn resume(&mut self, mut arg: Option<SocketOutput>) -> ReadSocketToEndResult {
+    pub fn resume(&mut self, mut arg: Option<SocketOutput>) -> SocketReadToEndResult {
         loop {
             match self.read.resume(arg.take()) {
-                ReadSocketResult::Ok { buf, n } => {
+                SocketReadResult::Ok { buf, n } => {
                     self.buffer.extend_from_slice(&buf[..n]);
                     self.read.replace(buf);
                 }
-                ReadSocketResult::Err { err } => {
-                    break ReadSocketToEndResult::Err { err: err.into() };
+                SocketReadResult::Err { err } => {
+                    break SocketReadToEndResult::Err { err: err.into() };
                 }
-                ReadSocketResult::Io { input } => {
-                    break ReadSocketToEndResult::Io { input };
+                SocketReadResult::Io { input } => {
+                    break SocketReadToEndResult::Io { input };
                 }
-                ReadSocketResult::Eof => {
+                SocketReadResult::Eof => {
                     let buf = mem::take(&mut self.buffer);
-                    break ReadSocketToEndResult::Ok { buf };
+                    break SocketReadToEndResult::Ok { buf };
                 }
             }
         }
     }
 }
 
-impl Default for ReadSocketToEnd {
+impl Default for SocketReadToEnd {
     fn default() -> Self {
         Self::new()
     }

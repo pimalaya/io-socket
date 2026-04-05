@@ -7,13 +7,13 @@ use log::{debug, trace};
 use thiserror::Error;
 
 use crate::{
-    coroutines::read::{ReadSocket, ReadSocketError, ReadSocketResult},
+    coroutines::read::{SocketRead, SocketReadError, SocketReadResult},
     io::{SocketInput, SocketOutput},
 };
 
 /// Errors that can occur during the coroutine progression.
 #[derive(Clone, Debug, Error)]
-pub enum ReadSocketExactError {
+pub enum SocketReadExactError {
     /// The socket reached EOF before `max` bytes could be read.
     ///
     /// Carries the number of bytes still missing, the total target, and
@@ -21,14 +21,14 @@ pub enum ReadSocketExactError {
     #[error("Unexpected EOF, expected to read {0}/{1} more bytes")]
     UnexpectedEof(usize, usize, Vec<u8>),
 
-    /// Error from the inner [`ReadSocket`] coroutine.
+    /// Error from the inner [`SocketRead`] coroutine.
     #[error(transparent)]
-    Read(#[from] ReadSocketError),
+    Read(#[from] SocketReadError),
 }
 
 /// Output emitted after the coroutine finishes its progression.
 #[derive(Clone, Debug)]
-pub enum ReadSocketExactResult {
+pub enum SocketReadExactResult {
     /// The coroutine has successfully read exactly the requested number
     /// of bytes.
     Ok { buf: Vec<u8> },
@@ -38,20 +38,20 @@ pub enum ReadSocketExactResult {
     Io { input: SocketInput },
 
     /// An error occurred during the coroutine progression.
-    Err { err: ReadSocketExactError },
+    Err { err: SocketReadExactError },
 }
 
 /// I/O-free coroutine to read exactly N bytes from a socket.
 ///
-/// Drives a [`ReadSocket`] coroutine in a loop, accumulating chunks
+/// Drives a [`SocketRead`] coroutine in a loop, accumulating chunks
 /// until exactly `max` bytes have been received. If the socket reaches
 /// EOF before that, the coroutine returns
-/// [`ReadSocketExactError::UnexpectedEof`] along with whatever bytes
+/// [`SocketReadExactError::UnexpectedEof`] along with whatever bytes
 /// were accumulated.
 #[derive(Debug)]
-pub struct ReadSocketExact {
+pub struct SocketReadExact {
     /// Inner single-read coroutine, reused across iterations.
-    read: ReadSocket,
+    read: SocketRead,
 
     /// Accumulates bytes across multiple reads until `max` is reached.
     buffer: Vec<u8>,
@@ -60,11 +60,11 @@ pub struct ReadSocketExact {
     max: usize,
 }
 
-impl ReadSocketExact {
+impl SocketReadExact {
     /// Creates a new coroutine using a read buffer with
-    /// [`ReadSocket::DEFAULT_CAPACITY`] capacity.
+    /// [`SocketRead::DEFAULT_CAPACITY`] capacity.
     pub fn new(max: usize) -> Self {
-        Self::with_capacity(ReadSocket::DEFAULT_CAPACITY, max)
+        Self::with_capacity(SocketRead::DEFAULT_CAPACITY, max)
     }
 
     /// Creates a new coroutine using a read buffer with the given
@@ -74,7 +74,7 @@ impl ReadSocketExact {
     /// requesting more bytes than the remaining target.
     pub fn with_capacity(capacity: usize, max: usize) -> Self {
         trace!("init coroutine to read exactly {max} bytes (capacity: {capacity})");
-        let read = ReadSocket::with_capacity(capacity.min(max));
+        let read = SocketRead::with_capacity(capacity.min(max));
         let buffer = Vec::with_capacity(max);
         Self { read, buffer, max }
     }
@@ -92,11 +92,11 @@ impl ReadSocketExact {
     /// Pass `None` on the first call. On subsequent calls, pass the
     /// [`SocketOutput`] returned by the runtime after processing the
     /// last emitted [`SocketInput`].
-    pub fn resume(&mut self, mut arg: Option<SocketOutput>) -> ReadSocketExactResult {
+    pub fn resume(&mut self, mut arg: Option<SocketOutput>) -> SocketReadExactResult {
         loop {
             if self.buffer.len() >= self.max {
                 let buf = mem::take(&mut self.buffer);
-                break ReadSocketExactResult::Ok { buf };
+                break SocketReadExactResult::Ok { buf };
             }
 
             let remaining = self.max - self.buffer.len();
@@ -108,20 +108,20 @@ impl ReadSocketExact {
             }
 
             match self.read.resume(arg.take()) {
-                ReadSocketResult::Ok { buf, n } => {
+                SocketReadResult::Ok { buf, n } => {
                     self.buffer.extend_from_slice(&buf[..n]);
                     self.read.replace(buf);
                 }
-                ReadSocketResult::Err { err } => {
-                    break ReadSocketExactResult::Err { err: err.into() };
+                SocketReadResult::Err { err } => {
+                    break SocketReadExactResult::Err { err: err.into() };
                 }
-                ReadSocketResult::Io { input } => {
-                    break ReadSocketExactResult::Io { input };
+                SocketReadResult::Io { input } => {
+                    break SocketReadExactResult::Io { input };
                 }
-                ReadSocketResult::Eof => {
+                SocketReadResult::Eof => {
                     let buf = mem::take(&mut self.buffer);
-                    let err = ReadSocketExactError::UnexpectedEof(remaining, self.max, buf);
-                    break ReadSocketExactResult::Err { err };
+                    let err = SocketReadExactError::UnexpectedEof(remaining, self.max, buf);
+                    break SocketReadExactResult::Err { err };
                 }
             }
         }

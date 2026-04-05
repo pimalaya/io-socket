@@ -10,7 +10,7 @@ use crate::io::{SocketInput, SocketOutput};
 
 /// Errors that can occur during the coroutine progression.
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
-pub enum WriteSocketError {
+pub enum SocketWriteError {
     /// The coroutine received an invalid argument.
     ///
     /// Occurs when the coroutine receives an I/O response from
@@ -22,7 +22,7 @@ pub enum WriteSocketError {
 
 /// Output emitted after a coroutine finishes its progression.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum WriteSocketResult {
+pub enum SocketWriteResult {
     /// The coroutine has successfully terminated its progression.
     Ok { buf: Vec<u8>, n: usize },
 
@@ -36,16 +36,16 @@ pub enum WriteSocketResult {
     Eof,
 
     /// An error occurred during the coroutine progression.
-    Err { err: WriteSocketError },
+    Err { err: SocketWriteError },
 }
 
 /// I/O-free coroutine to write bytes into a buffer.
 #[derive(Clone, Eq, PartialEq)]
-pub struct WriteSocket {
+pub struct SocketWrite {
     buf: Vec<u8>,
 }
 
-impl WriteSocket {
+impl SocketWrite {
     /// Creates a new coroutine that will write the given bytes to the
     /// socket.
     pub fn new(buf: Vec<u8>) -> Self {
@@ -54,32 +54,32 @@ impl WriteSocket {
     }
 
     /// Makes the write progress.
-    pub fn resume(&mut self, arg: Option<SocketOutput>) -> WriteSocketResult {
+    pub fn resume(&mut self, arg: Option<SocketOutput>) -> SocketWriteResult {
         let Some(arg) = arg else {
             trace!("wants to write bytes");
             let buf = mem::take(&mut self.buf);
             let input = SocketInput::Write { buf };
-            return WriteSocketResult::Io { input };
+            return SocketWriteResult::Io { input };
         };
 
         trace!("resume after writing bytes");
         let SocketOutput::Wrote { buf, n } = arg else {
-            let err = WriteSocketError::UnexpectedArg(arg);
-            return WriteSocketResult::Err { err };
+            let err = SocketWriteError::UnexpectedArg(arg);
+            return SocketWriteResult::Err { err };
         };
 
         if n == 0 {
             debug!("received EOF");
-            return WriteSocketResult::Eof;
+            return SocketWriteResult::Eof;
         }
 
         debug!("wrote {n}/{} bytes", buf.capacity());
-        WriteSocketResult::Ok { buf, n }
+        SocketWriteResult::Ok { buf, n }
     }
 }
 
-impl fmt::Debug for WriteSocket {
+impl fmt::Debug for SocketWrite {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "WriteSocket({})", self.buf.len())
+        write!(f, "SocketWrite({})", self.buf.len())
     }
 }

@@ -4,8 +4,8 @@ use std::env;
 
 use io_socket::{
     coroutines::{
-        read::{ReadSocket, ReadSocketResult},
-        write::{WriteSocket, WriteSocketResult},
+        read::{SocketRead, SocketReadResult},
+        write::{SocketWrite, SocketWriteResult},
     },
     runtimes::tokio_stream::handle,
 };
@@ -38,14 +38,14 @@ async fn main() {
     stdout.write_all(b"\nReceived greeting:\n").await.unwrap();
 
     let mut arg = None;
-    let mut read = ReadSocket::new();
+    let mut read = SocketRead::new();
 
     let (buf, n) = loop {
         match read.resume(arg.take()) {
-            ReadSocketResult::Ok { buf, n } => break (buf, n),
-            ReadSocketResult::Io { input } => arg = Some(handle(&mut tcp, input).await.unwrap()),
-            ReadSocketResult::Err { err } => panic!("{err}"),
-            ReadSocketResult::Eof => panic!("reached unexpected EOF"),
+            SocketReadResult::Ok { buf, n } => break (buf, n),
+            SocketReadResult::Io { input } => arg = Some(handle(&mut tcp, input).await.unwrap()),
+            SocketReadResult::Err { err } => panic!("{err}"),
+            SocketReadResult::Eof => panic!("reached unexpected EOF"),
         }
     };
 
@@ -64,30 +64,30 @@ async fn main() {
         data.push_str("\r\n");
 
         let mut arg = None;
-        let mut write = WriteSocket::new(data.into_bytes());
+        let mut write = SocketWrite::new(data.into_bytes());
 
         loop {
             match write.resume(arg.take()) {
-                WriteSocketResult::Ok { .. } => break,
-                WriteSocketResult::Io { input } => {
+                SocketWriteResult::Ok { .. } => break,
+                SocketWriteResult::Io { input } => {
                     arg = Some(handle(&mut tcp, input).await.unwrap())
                 }
-                WriteSocketResult::Err { err } => panic!("{err}"),
-                WriteSocketResult::Eof => panic!("reached unexpected EOF"),
+                SocketWriteResult::Err { err } => panic!("{err}"),
+                SocketWriteResult::Eof => panic!("reached unexpected EOF"),
             }
         }
 
         let mut arg = None;
-        let mut read = ReadSocket::new();
+        let mut read = SocketRead::new();
 
         let (buf, n) = loop {
             match read.resume(arg.take()) {
-                ReadSocketResult::Ok { buf, n } => break (buf, n),
-                ReadSocketResult::Io { input } => {
+                SocketReadResult::Ok { buf, n } => break (buf, n),
+                SocketReadResult::Io { input } => {
                     arg = Some(handle(&mut tcp, input).await.unwrap())
                 }
-                ReadSocketResult::Err { err } => panic!("{err}"),
-                ReadSocketResult::Eof => panic!("reached unexpected EOF"),
+                SocketReadResult::Err { err } => panic!("{err}"),
+                SocketReadResult::Eof => panic!("reached unexpected EOF"),
             }
         };
 

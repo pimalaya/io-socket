@@ -31,28 +31,28 @@ fn main() {
 
     // Send the query datagram.
     let mut arg = None;
-    let mut write = WriteSocket::new(query);
+    let mut write = SocketWrite::new(query);
 
     loop {
         match write.resume(arg.take()) {
-            WriteSocketResult::Ok { .. } => break,
-            WriteSocketResult::Io { input } => arg = Some(handle(&mut socket, input).unwrap()),
-            WriteSocketResult::Err { err } => panic!("write error: {err}"),
-            WriteSocketResult::Eof => panic!("reached unexpected EOF"),
+            SocketWriteResult::Ok { .. } => break,
+            SocketWriteResult::Io { input } => arg = Some(handle(&mut socket, input).unwrap()),
+            SocketWriteResult::Err { err } => panic!("write error: {err}"),
+            SocketWriteResult::Eof => panic!("reached unexpected EOF"),
         }
     }
 
     // Receive the response datagram.
     // A single recv() returns the entire DNS response (datagrams are atomic).
     let mut arg = None;
-    let mut read = ReadSocket::new();
+    let mut read = SocketRead::new();
 
     let (buf, n) = loop {
         match read.resume(arg.take()) {
-            ReadSocketResult::Ok { buf, n } => break (buf, n),
-            ReadSocketResult::Io { input } => arg = Some(handle(&mut socket, input).unwrap()),
-            ReadSocketResult::Err { err } => panic!("read error: {err}"),
-            ReadSocketResult::Eof => panic!("reached unexpected EOF"),
+            SocketReadResult::Ok { buf, n } => break (buf, n),
+            SocketReadResult::Io { input } => arg = Some(handle(&mut socket, input).unwrap()),
+            SocketReadResult::Err { err } => panic!("read error: {err}"),
+            SocketReadResult::Eof => panic!("reached unexpected EOF"),
         }
     };
 
